@@ -8,7 +8,8 @@ setup(
    packages=['pyrem'],
    license='LICENSE',
    description='a python library containing all sorts of tools to understand EoR Experiments',
-   long_description=open('README.md').read(),
+   url="https://github.com/ronniyjoseph/pyREM",
+    long_description=open('README.md').read(),
    install_requires=[
       "numpy >= 1.15.1",
       "scipy >= 1.2",
@@ -16,4 +17,5 @@ setup(
       "powerbox >= 0.5.0",
       "numba >= 0.40.0"
    ],
+python_requires='>=3.6'
 )
