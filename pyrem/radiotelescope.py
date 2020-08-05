@@ -215,10 +215,9 @@ def beam_width(frequency =150e6, diameter=4, epsilon=0.42):
     return width
 
 
-def airy_beam(theta, nu=150e6, diameter = 6):
+def airy_beam(l, nu=150e6, diameter = 6):
     k = 2*numpy.pi*nu/c
-
-    beam = (2*jv(1, k*diameter*numpy.sin(theta))/(k*diameter*numpy.sin(theta)))**2.
+    beam = 2*jv(1, k*diameter*l)/(k*diameter*l)
     return beam
 
 
