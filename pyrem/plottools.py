@@ -4,7 +4,9 @@ from matplotlib import colors
 from .generaltools import from_eta_to_k_par
 from .generaltools import from_u_to_k_perp
 from .generaltools import from_jansky_to_milikelvin
-
+from .generaltools import horizon_delay
+from astropy.convolution import convolve
+from astropy.convolution import Tophat2DKernel
 
 def colorbar(mappable, extend='neither'):
     ax = mappable.axes
@@ -81,7 +83,7 @@ def plot_1dpower_spectrum(eta_bins, nu, data, norm = None, title=None, axes=None
 def plot_2dpower_spectrum(u_bins, eta_bins, nu, data, norm = None, title=None, axes=None,
                         colormap = "viridis", axes_label_font=20, tickfontsize=15, xlabel_show=False, ylabel_show=False,
                         zlabel_show=False, z_label = None, return_norm = False, colorbar_show = False, colorbar_limits = 'neither',
-                        ratio = False, diff = False, x_range = None, y_range = None):
+                        ratio = False, diff = False, x_range = None, y_range = None, horizon = False):
 
     central_frequency = nu[int(len(nu) / 2)]
     x_values = from_u_to_k_perp(u_bins, central_frequency)
@@ -126,6 +128,10 @@ def plot_2dpower_spectrum(u_bins, eta_bins, nu, data, norm = None, title=None, a
         if zlabel_show:
             cax.set_label(z_label, fontsize=axes_label_font)
 
+    if horizon:
+        k_par = horizon_delay(u, nu)
+        axes.plot(x_values, k_par, 'k')
+
     axes.set_xscale('log')
     axes.set_yscale('log')
 
@@ -141,8 +147,8 @@ def plot_2dpower_spectrum(u_bins, eta_bins, nu, data, norm = None, title=None, a
 
 def plot_power_contours(u_bins, eta_bins, nu, data, norm = None, title=None, axes=None,
                   contour_levels=None, axes_label_font=20, tickfontsize=15, xlabel_show=False, ylabel_show=False,
-                  zlabel_show=False, z_label = None, ratio = False, diff = False, x_range = None, y_range = None,
-                        contour_label_locs = None):
+                ratio = False, diff = False, x_range = None, y_range = None, contour_label_locs = None, smooth = None,
+                        contour_styles = None):
 
 
     central_frequency = nu[int(len(nu) / 2)]
@@ -179,9 +185,12 @@ def plot_power_contours(u_bins, eta_bins, nu, data, norm = None, title=None, axe
         axes.set_title(title)
 
     xx, yy = numpy.meshgrid(x_values, y_values)
-    contourplot = axes.contour(xx, yy, z_values.T, levels = contour_levels, colors='w')
+    if smooth is not None:
+        kernel = Tophat2DKernel(smooth)
+        z_values = convolve(z_values, kernel, boundary='extend')
+    contourplot = axes.contour(xx, yy, z_values.T, levels = contour_levels, colors='w', linestyles=contour_styles)
     if contour_label_locs is not None:
-        axes.clabel(contourplot, inline=1, fontsize=10,  fmt='%d', manual=contour_label_locs)
+        axes.clabel(contourplot, inline=1, fontsize=10,  fmt='%.1f', manual=contour_label_locs)
 
     axes.set_xscale('log')
     axes.set_yscale('log')
