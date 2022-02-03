@@ -5,22 +5,27 @@ from scipy.constants import c
 
 class RadioTelescope:
 
-    def __init__(self, load=True, path=None, shape=None, frequency_channels=None, verbose=False):
+    def __init__(self, load=True, path=None, shape=None, frequency_channels=None, name="nameless", verbose=False):
         if verbose:
             print("Creating the radio telescope")
+        self.name = name
+        self.number_of_antennae = None
         self.antenna_id = None
         self.x_coordinate = None
         self.y_coordinate = None
         self.z_coordinate = None
         self.antenna_gain = None
+        self.frequencies = None
 
+        self.number_of_baselines = None
+        self.reference_frequency = None
         self.baseline_id = None
         self.u_coordinate = None
         self.v_coordinate = None
         self.w_coordinate = None
         self.antenna_id1 = None
         self.antenna_id2 = None
-        self.number_of_baselines = None
+
         self.group_id = None
         self.selection = None
 
@@ -32,18 +37,78 @@ class RadioTelescope:
             self.x_coordinate = data[:, 1]
             self.y_coordinate = data[:, 2]
             self.z_coordinate = data[:, 3]
+            self.number_of_antennae = len(data[:, 0])
         elif load:
             data = load_xyz_positions(path, verbose)
             self.antenna_id = data[:, 0]
             self.x_coordinate = data[:, 1]
             self.y_coordinate = data[:, 2]
             self.z_coordinate = data[:, 3]
+            self.number_of_antennae = len(data[:, 0])
+
         else:
             if verbose:
                 print("Initialised empty class")
+
+        ##### Maybe add some checks to whether the class has been initialised 'properly'
         return
 
+    #Function to compute baseline table
+    def compute_baselines(self, reference_frequency = 150e6, verbose=False):
+        if verbose:
+            print("")
+            print("Converting xyz to uvw-coordinates")
 
+        #Determine a reference frequency for uvw-coordinate conversion
+        self.reference_frequency = reference_frequency
+        #TODO: check whether dimensions of all position arrays line up
+
+        # calculate the wavelengths of the adjacent channels
+        reference_wavelength = c / self.reference_frequency
+        # Count the number of antenna
+        if self.number_of_antennae is None:
+            self.number_of_antennae = len(self.x_coordinate)
+        # Calculate the number of possible baselines
+
+        self.number_of_baselines = int(0.5 * self.number_of_antennae * (self.number_of_antennae - 1.))
+
+        # Create arrays for the baselines
+        # baselines x Antenna1, Antenna2, u, v, w, gain product, phase sum x channels
+        #TODO implement a frequency dimension to add antenna gains
+        self.antenna_id1 = np.zeros(self.number_of_baselines)
+        self.antenna_id2 = np.zeros_like(self.antenna_id1)
+
+        self.u_coordinate = np.zeros_like(self.antenna_id1)
+        self.v_coordinate = np.zeros_like(self.antenna_id1)
+        self.w_coordinate = np.zeros_like(self.antenna_id1)
+        #Properly implement the multifrequency gain here
+        self.baseline_gain = np.zeros((self.number_of_baselines, 1), dtype=complex)
+
+        if verbose:
+            print("")
+            print("Number of antenna =", self.number_of_antennae)
+            print("Total number of baselines =", self.number_of_baselines)
+
+        # arbitrary counter to keep track of the baseline table
+        k = 0
+
+        for i in range(self.number_of_antennae):
+            for j in range(i + 1, self.number_of_antennae):
+                # save the antenna numbers in the uv table
+                self.antenna_id1[k] = self.antenna_id[i]
+                self.antenna_id2[k] = self.antenna_id[j]
+
+                # rescale and write uvw to multifrequency baseline table
+                self.u_coordinate[k] = (self.x_coordinate[i] - self.x_coordinate[j]) / reference_wavelength
+                self.v_coordinate[k] = (self.y_coordinate[i] - self.y_coordinate[j]) / reference_wavelength
+                self.w_coordinate[k] = (self.z_coordinate[i] - self.z_coordinate[j]) / reference_wavelength
+                if self.antenna_gain is None:
+                    self.baseline_gain[k] = 1 + 0j
+                else:
+                    self.baseline_gain[k] = self.antenna_gain[i]*numpy.conj(self.antenna_gain[j])
+
+                k += 1
+        return
 
 def create_xyz_positions(shape, verbose=False):
     """
@@ -184,3 +249,6 @@ def load_xyz_positions(path, verbose=False):
     antenna_data = antenna_data[np.argsort(antenna_data[:, 0])]
 
     return antenna_data
+
+
+
