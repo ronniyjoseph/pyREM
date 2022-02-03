@@ -110,6 +110,18 @@ class RadioTelescope:
                 k += 1
         return
 
+    def u(self, frequency=None):
+        rescaled_u = rescale_baseline(self.u_coordinate, self.reference_frequency, frequency)
+        return rescaled_u
+
+    def v(self, frequency=None):
+        rescaled_v = rescale_baseline(self.v_coordinate, self.reference_frequency, frequency)
+        return rescaled_v
+
+    def w(self, frequency=None):
+        rescaled_w = rescale_baseline(self.w_coordinate, self.reference_frequency, frequency)
+        return rescaled_w
+
 def create_xyz_positions(shape, verbose=False):
     """
     Generates an array lay-out defined by input parameters, returns
@@ -251,4 +263,18 @@ def load_xyz_positions(path, verbose=False):
     return antenna_data
 
 
+def rescale_baseline(baseline_coordinates, reference_frequency, frequency):
+    if frequency is None:
+        rescaled_coordinates = baseline_coordinates
+    elif np.isscalar(frequency):
+        rescaling_factor = frequency / reference_frequency
+        rescaled_coordinates = baseline_coordinates * rescaling_factor
+    elif type(frequency) == np.ndarray:
+        rescaling_factor = frequency / reference_frequency
+        coordinate_mesh, rescale_mesh = np.meshgrid(rescaling_factor, baseline_coordinates)
+        rescaled_coordinates = coordinate_mesh * rescale_mesh
+    else:
+        raise ValueError(f"frequency should be scalar or numpy.ndarray not {type(frequency)}")
+
+    return rescaled_coordinates
 
