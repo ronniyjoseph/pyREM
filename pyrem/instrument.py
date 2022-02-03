@@ -42,3 +42,19 @@ class RadioTelescope:
             if verbose:
                 print("Initialised empty class")
         return
+
+
+def load_xyz_positions(path, verbose=False):
+    antenna_data = np.loadtxt(path)
+    # Check whether antenna ids are passed are in here
+    if antenna_data.shape[1] != 4:
+        antenna_ids = numpy.arange(1, antenna_data.shape[0] + 1, 1).reshape((antenna_data.shape[0], 1))
+        antenna_data = numpy.hstack((antenna_ids, antenna_data))
+    elif antenna_data.shape[1] > 4:
+        raise ValueError(f"The antenna position file should only contain 4 columns: antenna_id, x, y, z. \n " +
+                         f"This file contains {antenna_data.shape[1]} columns")
+
+    ### Is this really necessary
+    antenna_data = antenna_data[numpy.argsort(antenna_data[:, 0])]
+
+    return antenna_data
