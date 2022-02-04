@@ -122,6 +122,41 @@ class RadioTelescope:
         rescaled_w = rescale_baseline(self.w_coordinate, self.reference_frequency, frequency)
         return rescaled_w
 
+    def find_redundant(self, baseline_direction = None, verbose=False, minimum_baselines = 3, tolerance = 1/6):
+        # create empty table
+        self.group_id = np.zeros(self.number_of_baselines)
+        baseline_index = np.arange(self.number_of_baselines)
+        print()
+        # arbitrary counters
+        # Let's find all the redundant baselines within our threshold
+        group_counter = 0
+        k = 0
+        # Go through all baseline, take each antenna out and all antennas which are part of the not redundant enough group
+        while baseline_index.shape[0] > 0:
+            print("")
+            print(f"all indices {baseline_index}")
+            # calculate uv separation at the calibration wavelength
+            separation = np.sqrt(
+                (self.u_coordinate[baseline_index] - self.u_coordinate[baseline_index[0]]) ** 2. +
+                (self.v_coordinate[baseline_index] - self.v_coordinate[baseline_index[0]]) ** 2.)
+            # find all baselines within the lambda fraction
+            select_indices = np.where(separation <= tolerance)[0]
+
+            print(f"selected indices {baseline_index[select_indices]}")
+            # is this number larger than the minimum number
+            if len(select_indices) >= minimum_baselines:
+                # go through the selected baselines
+                    # add antenna number
+                self.group_id[baseline_index[select_indices]] = 50000000 + 52 * (group_counter + 1)
+                k += 1
+                group_counter += 1
+            # update the list, take out the used antennas
+            unselected_indices = np.setdiff1d(baseline_index, baseline_index[select_indices])
+            print(f"unselected {unselected_indices}")
+            baseline_index = unselected_indices
+        return
+
+
 def create_xyz_positions(shape, verbose=False):
     """
     Generates an array lay-out defined by input parameters, returns
