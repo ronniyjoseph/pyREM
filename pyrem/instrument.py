@@ -38,6 +38,7 @@ class RadioTelescope:
             self.y_coordinate = data[:, 2]
             self.z_coordinate = data[:, 3]
             self.number_of_antennae = len(data[:, 0])
+            self.compute_baselines(verbose=verbose)
         elif load:
             data = load_xyz_positions(path, verbose)
             self.antenna_id = data[:, 0]
@@ -45,6 +46,7 @@ class RadioTelescope:
             self.y_coordinate = data[:, 2]
             self.z_coordinate = data[:, 3]
             self.number_of_antennae = len(data[:, 0])
+            self.compute_baselines(verbose=verbose)
 
         else:
             if verbose:
@@ -81,6 +83,7 @@ class RadioTelescope:
         self.u_coordinate = np.zeros_like(self.antenna_id1)
         self.v_coordinate = np.zeros_like(self.antenna_id1)
         self.w_coordinate = np.zeros_like(self.antenna_id1)
+        self.baseline_id = np.zeros_like(self.antenna_id1)
         #Properly implement the multifrequency gain here
         self.baseline_gain = np.zeros((self.number_of_baselines, 1), dtype=complex)
 
@@ -122,19 +125,16 @@ class RadioTelescope:
         rescaled_w = rescale_baseline(self.w_coordinate, self.reference_frequency, frequency)
         return rescaled_w
 
-    def find_redundant(self, baseline_direction = None, verbose=False, minimum_baselines = 3, tolerance = 1/6):
+    def find_redundant(self, baseline_direction = None, verbose=False, minimum_baselines = 2, tolerance = 1/6):
         # create empty table
         self.group_id = np.zeros(self.number_of_baselines)
         baseline_index = np.arange(self.number_of_baselines)
-        print()
         # arbitrary counters
         # Let's find all the redundant baselines within our threshold
         group_counter = 0
         k = 0
         # Go through all baseline, take each antenna out and all antennas which are part of the not redundant enough group
         while baseline_index.shape[0] > 0:
-            print("")
-            print(f"all indices {baseline_index}")
             # calculate uv separation at the calibration wavelength
             separation = np.sqrt(
                 (self.u_coordinate[baseline_index] - self.u_coordinate[baseline_index[0]]) ** 2. +
@@ -142,7 +142,6 @@ class RadioTelescope:
             # find all baselines within the lambda fraction
             select_indices = np.where(separation <= tolerance)[0]
 
-            print(f"selected indices {baseline_index[select_indices]}")
             # is this number larger than the minimum number
             if len(select_indices) >= minimum_baselines:
                 # go through the selected baselines
@@ -152,10 +151,18 @@ class RadioTelescope:
                 group_counter += 1
             # update the list, take out the used antennas
             unselected_indices = np.setdiff1d(baseline_index, baseline_index[select_indices])
-            print(f"unselected {unselected_indices}")
             baseline_index = unselected_indices
         return
 
+    def sort_baselines(self, parameter=None):
+
+        sort_index = np.argsort(self.group_id)
+        self.u_coordinate = self.u_coordinate[sort_index]
+        self.v_coordinate = self.v_coordinate[sort_index]
+        self.w_coordinate = self.v_coordinate[sort_index]
+        self.antenna_id1 = self.antenna_id1[sort_index]
+        self.antenna_id1 = self.antenna_id1[sort_index]
+        return
 
 def create_xyz_positions(shape, verbose=False):
     """
