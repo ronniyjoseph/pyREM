@@ -7,7 +7,6 @@ from .radiotelescope import mwa_dipole_locations
 
 from .skymodel import sky_moment_returner
 from .powerspectrum import compute_power
-from matplotlib import pyplot
 
 
 class CovarianceMatrix:
@@ -34,7 +33,7 @@ class CovarianceMatrix:
 
         #So this point source sky model is calibrated for 150 MHz, can we scale this?
         u, v, nu =  self.return_grid()
-        mu = sky_moment(2, s_low=S_low, s_mid=S_mid, s_high=S_high)
+        mu = sky_moment_returner(2, s_low=S_low, s_mid=S_mid, s_high=S_high)
 
         #If we're computing the covariance matrix over multiple frequencies we still want to end up with a 2D array that
         #that has the baseline-frequency covariance
@@ -46,10 +45,8 @@ class CovarianceMatrix:
         kernel = -2 * np.pi ** 2 * sigma_nu * ( (u[0] * nu[0] - u[1] * nu[1]) ** 2 +
                                                 (v[0] * nu[0] - v[1] * nu[1]) ** 2) / nu_0 ** 2
         covariance = 2 * np.pi * mu * sigma_nu * (nu[0] * nu[1] / nu_0 ** 2) ** (- gamma) * np.exp(kernel)
-
-        plt.imshow(covariance)
-        plt.show()
-        return
+        self.covariance = covariance
+        return covariance
 
     def return_grid(self):
         uu1, uu2 = np.meshgrid(self.u, self.u)
@@ -71,6 +68,9 @@ class CovarianceMatrix:
 
         return (u_grid1, u_grid2), (v_grid1, v_grid2), (nu_grid1, nu_grid2)
 
+    def eigendecomposition(self):
+        self.eigenvalues, self.eigenmodes =  np.linalg.eig(self.covariance)
+        return self.eigenvalues, self.eigenmodes
 
 
     def airy(self):
