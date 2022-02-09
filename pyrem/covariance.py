@@ -8,6 +8,141 @@ from .radiotelescope import mwa_dipole_locations
 from .skymodel import sky_moment_returner
 from .powerspectrum import compute_power
 
+class CovarianceMatrix:
+
+    #Currently only per baseline not per real and imaginary component of each baseline
+
+    def __init__(self, u, v, nu, group_ids):
+        self.u = u
+        self.v = v
+        self.nu = nu
+        self.group_ids = group_ids
+        self.beam_model =  None
+        self.baselines =  None
+        self.matrix =  None
+        self.eigenvalues = None
+        self.eigenmodes =  None
+
+        return
+
+    def gaussian(self, aperture_diameter=2, S_low=1e-3, S_mid=1, S_high=10, gamma=0.8, nu_0 = 150e6):
+        """
+        Flat-sky gaussian approximation of a antenna beam
+
+        """
+        #Compute 2nd moment of the Point Source counts function thingy
+
+        #So this point source sky model is calibrated for 150 MHz, can we scale this?
+        u, v, nu =  self.return_grid()
+        mu = sky_moment_returner(2, s_low=S_low, s_mid=S_mid, s_high=S_high)
+
+        #If we're computing the covariance matrix over multiple frequencies we still want to end up with a 2D array that
+        #that has the baseline-frequency covariance
+
+        beam_width1 = beam_width(nu[0], diameter=aperture_diameter)
+        beam_width2 = beam_width(nu[1], diameter=aperture_diameter)
+        sigma_nu = beam_width1 ** 2 * beam_width2 ** 2 / (beam_width1 ** 2 + beam_width2 ** 2)
+
+        kernel = -2 * np.pi ** 2 * sigma_nu * ( (u[0] * nu[0] - u[1] * nu[1]) ** 2 +
+                                                (v[0] * nu[0] - v[1] * nu[1]) ** 2) / nu_0 ** 2
+        covariance = 2 * np.pi * mu * sigma_nu * (nu[0] * nu[1] / nu_0 ** 2) ** (- gamma) * np.exp(kernel)
+        self.matrix = covariance
+        return covariance
+
+    def return_grid(self):
+        #work in an option to do full frequency/and per frequency because it would be good to be able and look at
+        #the evolution of the eigenmodes as a function of frequency easily
+
+        uu1, uu2 = np.meshgrid(self.u, self.u)
+        vv1, vv2 = np.meshgrid(self.v, self.v)
+
+        u_grid1 = np.tile(uu1, np.array([len(self.nu), len(self.nu)]))
+        u_grid2 = np.tile(uu2, np.array([len(self.nu), len(self.nu)]))
+
+        v_grid1 = np.tile(vv1, np.array([len(self.nu), len(self.nu)]))
+        v_grid2 = np.tile(vv2, np.array([len(self.nu), len(self.nu)]))
+
+        nu_grid1 = np.zeros_like(u_grid1)
+        nu_grid2 = np.zeros_like(u_grid1)
+
+        # Create the full covariance_coordinate grid?
+        for i in range(len(self.nu)):
+            nu_grid1[i * len(self.u):(i + 1) * len(self.u), :] = self.nu[i]
+            nu_grid2[:, i * len(self.u):(i + 1) * len(self.u)] = self.nu[i]
+
+        return (u_grid1, u_grid2), (v_grid1, v_grid2), (nu_grid1, nu_grid2)
+
+
+    def eigendecomposition(self, number=3, tolerance=1e-5):
+        #Stores the first 'number' eigenmodes within tolerance level of the highest amplitude
+
+        #Determine the number of unique groups + all the non grouped baselines
+        group_ids = np.unique(self.group_ids)
+        #remove non-redundant baselines
+        #initialise an array to keep the eigenvalues per redundant group and per selected mode
+        self.eigenvalues = np.zeros((len(group_ids), number), dtype=complex)
+        #initialise an array to store the eigenvectors (vertically stakced) per redundant group and selected mode
+        self.eigenmodes = np.zeros((len(self.group_ids), number), dtype=complex)
+
+        #iterate over each redundant group
+        for i in range(len(group_ids)):
+            if group_ids[i] > 0:
+                #Find all baselines that belong to this group
+                index =  np.where(self.group_ids == group_ids[i])[0]
+                # check whether they are contiguous, if not the data may need to be re-sorted
+                if np.diff(index).max() > 1:
+                    print("Warning: (quasi)-redundant baselines may not be organised in groups")
+                #Create 2D selection indices/could also slice, but this will work when data is non contiguous
+                ii, jj = np.meshgrid(index, index)
+                #Select the block component from the covariance matrix and reshape into a NxN matrix
+                block_matrix = self.matrix[ii, jj].reshape((index.shape[0],index.shape[0]))
+                #Decompose into eigemodes
+                eigenvalues, eigenmodes = np.linalg.eig(block_matrix)
+
+                #Find eigenmodes within the selected tolerance
+                eigen_index = np.where(eigenvalues > tolerance*eigenvalues.max())[0]
+                #Sort the selected indices by the eigenvalue amplitudes
+                eigen_index = eigen_index[np.argsort(np.abs(eigenvalues[eigen_index]))]
+
+                #Need to figure out whether this number if larger or smaller than requested eigenmodes
+                #Also would be nice to sort the eigenmodes
+
+                if len(eigen_index) < number:
+                    n_modes = len(eigen_index)
+                else:
+                    n_modes = number
+                self.eigenvalues[i, :n_modes] = eigenvalues[eigen_index[:n_modes]]
+                self.eigenmodes[index, :n_modes] = eigenmodes[:, eigen_index[:n_modes]]
+
+        return self.eigenvalues, self.eigenmodes
+
+
+    def reconstruct_matrix(self):
+        matrix =  np.zeros((len(self.group_ids), len(self.group_ids)), dtype=complex)
+        group_ids = np.unique(self.group_ids)
+        for i in range(len(group_ids)):
+            index = np.where(self.group_ids == group_ids[i])[0]
+
+            eigenvalues = self.eigenvalues[i, :]
+            eigenmodes = self.eigenmodes[index, :]
+            matrix[index[0]:index[-1]+1,index[0]:index[-1]+1] = eigenmodes.dot(np.diag(eigenvalues)).dot(np.conj(eigenmodes).T)
+        return matrix
+
+    def airy(self):
+        """
+        Flat-sky airy beam approximation of an antenna beam
+        """
+        return
+
+    def actualbeam(self):
+        return
+
+    def compute(self):
+        return
+
+    def decompose(self):
+        return
+
 def position_covariance(u, v, nu, position_precision = 1e-2, gamma = 0.8, mode = "frequency", nu_0 = 150e6,
                         tile_diameter = 4, s_high = 10):
     mu_1 = sky_moment_returner(n_order = 1, s_high= s_high)
