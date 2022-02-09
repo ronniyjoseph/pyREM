@@ -8,7 +8,6 @@ from .radiotelescope import mwa_dipole_locations
 from .skymodel import sky_moment_returner
 from .powerspectrum import compute_power
 
-
 class CovarianceMatrix:
 
     #Currently only per baseline not per real and imaginary component of each baseline
@@ -143,14 +142,6 @@ class CovarianceMatrix:
 
     def decompose(self):
         return
-
-
-
-
-
-
-
-
 
 def position_covariance(u, v, nu, position_precision = 1e-2, gamma = 0.8, mode = "frequency", nu_0 = 150e6,
                         tile_diameter = 4, s_high = 10):
