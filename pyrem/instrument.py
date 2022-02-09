@@ -156,12 +156,18 @@ class RadioTelescope:
 
     def sort_baselines(self, parameter=None):
 
-        sort_index = np.argsort(self.group_id)
+        if parameter == "group_id":
+            sort_index = np.argsort(self.group_id)
+        elif parameter == "baseline_length":
+            sort_index = np.argsort(self.u_coordinate**2 + self.v_coordinate**2)
+
         self.u_coordinate = self.u_coordinate[sort_index]
         self.v_coordinate = self.v_coordinate[sort_index]
         self.w_coordinate = self.v_coordinate[sort_index]
         self.antenna_id1 = self.antenna_id1[sort_index]
         self.antenna_id1 = self.antenna_id1[sort_index]
+        if self.group_id is not None:
+            self.group_id = self.group_id[sort_index]
         return
 
 def create_xyz_positions(shape, verbose=False):
