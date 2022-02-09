@@ -47,7 +47,7 @@ class CovarianceMatrix:
         kernel = -2 * np.pi ** 2 * sigma_nu * ( (u[0] * nu[0] - u[1] * nu[1]) ** 2 +
                                                 (v[0] * nu[0] - v[1] * nu[1]) ** 2) / nu_0 ** 2
         covariance = 2 * np.pi * mu * sigma_nu * (nu[0] * nu[1] / nu_0 ** 2) ** (- gamma) * np.exp(kernel)
-        self.covariance = covariance
+        self.matrix = covariance
         return covariance
 
     def return_grid(self):
@@ -80,8 +80,6 @@ class CovarianceMatrix:
         #Determine the number of unique groups + all the non grouped baselines
         group_ids = np.unique(self.group_ids)
         #remove non-redundant baselines
-        group_ids = group_ids[group_ids > 0]
-
         #initialise an array to keep the eigenvalues per redundant group and per selected mode
         self.eigenvalues = np.zeros((len(group_ids), number), dtype=complex)
         #initialise an array to store the eigenvectors (vertically stakced) per redundant group and selected mode
@@ -89,37 +87,47 @@ class CovarianceMatrix:
 
         #iterate over each redundant group
         for i in range(len(group_ids)):
+            if group_ids[i] > 0:
+                #Find all baselines that belong to this group
+                index =  np.where(self.group_ids == group_ids[i])[0]
+                # check whether they are contiguous, if not the data may need to be re-sorted
+                if np.diff(index).max() > 1:
+                    print("Warning: (quasi)-redundant baselines may not be organised in groups")
+                #Create 2D selection indices/could also slice, but this will work when data is non contiguous
+                ii, jj = np.meshgrid(index, index)
+                #Select the block component from the covariance matrix and reshape into a NxN matrix
+                block_matrix = self.matrix[ii, jj].reshape((index.shape[0],index.shape[0]))
+                #Decompose into eigemodes
+                eigenvalues, eigenmodes = np.linalg.eig(block_matrix)
 
-            #Find all baselines that belong to this group
-            index =  np.where(self.group_ids == group_ids[i])[0]
-            # check whether they are contiguous, if not the data may need to be re-sorted
-            if np.diff(index).max() > 1:
-                print("Warning: (quasi)-redundant baselines may not be organised in groups")
-            #Create 2D selection indices/could also slice, but this will work when data is non contiguous
-            ii, jj = np.meshgrid(index, index)
-            #Select the block component from the covariance matrix and reshape into a NxN matrix
-            block_matrix = self.covariance[ii, jj].reshape((index.shape[0],index.shape[0]))
-            #Decompose into eigemodes
-            eigenvalues, eigenmodes = np.linalg.eig(block_matrix)
+                #Find eigenmodes within the selected tolerance
+                eigen_index = np.where(eigenvalues > tolerance*eigenvalues.max())[0]
+                #Sort the selected indices by the eigenvalue amplitudes
+                eigen_index = eigen_index[np.argsort(np.abs(eigenvalues[eigen_index]))]
 
-            #Find eigenmodes within the selected tolerance
-            eigen_index = np.where(eigenvalues > tolerance*eigenvalues.max())[0]
-            #Sort the selected indices by the eigenvalue amplitudes
-            eigen_index = eigen_index[np.argsort(eigenvalues[eigen_index])]
+                #Need to figure out whether this number if larger or smaller than requested eigenmodes
+                #Also would be nice to sort the eigenmodes
 
-            #Need to figure out whether this number if larger or smaller than requested eigenmodes
-            #Also would be nice to sort the eigenmodes
-
-            if len(eigen_index) < number:
-                n_modes = len(eigen_index)
-            else:
-                n_modes = number
-
-            self.eigenvalues[i, :n_modes + 1] = eigenvalues[eigen_index[:n_modes+1]]
-            self.eigenmodes[index, :n_modes + 1] = eigenmodes[:, eigen_index[:n_modes +1]]
+                if len(eigen_index) < number:
+                    n_modes = len(eigen_index)
+                else:
+                    n_modes = number
+                self.eigenvalues[i, :n_modes] = eigenvalues[eigen_index[:n_modes]]
+                self.eigenmodes[index, :n_modes] = eigenmodes[:, eigen_index[:n_modes]]
 
         return self.eigenvalues, self.eigenmodes
 
+
+    def reconstruct_matrix(self):
+        matrix =  np.zeros((len(self.group_ids), len(self.group_ids)), dtype=complex)
+        group_ids = np.unique(self.group_ids)
+        for i in range(len(group_ids)):
+            index = np.where(self.group_ids == group_ids[i])[0]
+
+            eigenvalues = self.eigenvalues[i, :]
+            eigenmodes = self.eigenmodes[index, :]
+            matrix[index[0]:index[-1]+1,index[0]:index[-1]+1] = eigenmodes.dot(np.diag(eigenvalues)).dot(np.conj(eigenmodes).T)
+        return matrix
 
     def airy(self):
         """
