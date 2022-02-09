@@ -11,11 +11,13 @@ from .powerspectrum import compute_power
 
 class CovarianceMatrix:
 
-    def __init__(self, u, v, nu):
+    #Currently only per baseline not per real and imaginary component of each baseline
+
+    def __init__(self, u, v, nu, group_ids):
         self.u = u
         self.v = v
         self.nu = nu
-
+        self.group_ids = group_ids
         self.beam_model =  None
         self.baselines =  None
         self.matrix =  None
@@ -49,6 +51,9 @@ class CovarianceMatrix:
         return covariance
 
     def return_grid(self):
+        #work in an option to do full frequency/and per frequency because it would be good to be able and look at
+        #the evolution of the eigenmodes as a function of frequency easily
+
         uu1, uu2 = np.meshgrid(self.u, self.u)
         vv1, vv2 = np.meshgrid(self.v, self.v)
 
@@ -68,8 +73,51 @@ class CovarianceMatrix:
 
         return (u_grid1, u_grid2), (v_grid1, v_grid2), (nu_grid1, nu_grid2)
 
-    def eigendecomposition(self):
-        self.eigenvalues, self.eigenmodes =  np.linalg.eig(self.covariance)
+
+    def eigendecomposition(self, number=3, tolerance=1e-5):
+        #Stores the first 'number' eigenmodes within tolerance level of the highest amplitude
+
+        #Determine the number of unique groups + all the non grouped baselines
+        group_ids = np.unique(self.group_ids)
+        #remove non-redundant baselines
+        group_ids = group_ids[group_ids > 0]
+
+        #initialise an array to keep the eigenvalues per redundant group and per selected mode
+        self.eigenvalues = np.zeros((len(group_ids), number), dtype=complex)
+        #initialise an array to store the eigenvectors (vertically stakced) per redundant group and selected mode
+        self.eigenmodes = np.zeros((len(self.group_ids), number), dtype=complex)
+
+        #iterate over each redundant group
+        for i in range(len(group_ids)):
+
+            #Find all baselines that belong to this group
+            index =  np.where(self.group_ids == group_ids[i])[0]
+            # check whether they are contiguous, if not the data may need to be re-sorted
+            if np.diff(index).max() > 1:
+                print("Warning: (quasi)-redundant baselines may not be organised in groups")
+            #Create 2D selection indices/could also slice, but this will work when data is non contiguous
+            ii, jj = np.meshgrid(index, index)
+            #Select the block component from the covariance matrix and reshape into a NxN matrix
+            block_matrix = self.covariance[ii, jj].reshape((index.shape[0],index.shape[0]))
+            #Decompose into eigemodes
+            eigenvalues, eigenmodes = np.linalg.eig(block_matrix)
+
+            #Find eigenmodes within the selected tolerance
+            eigen_index = np.where(eigenvalues > tolerance*eigenvalues.max())[0]
+            #Sort the selected indices by the eigenvalue amplitudes
+            eigen_index = eigen_index[np.argsort(eigenvalues[eigen_index])]
+
+            #Need to figure out whether this number if larger or smaller than requested eigenmodes
+            #Also would be nice to sort the eigenmodes
+
+            if len(eigen_index) < number:
+                n_modes = len(eigen_index)
+            else:
+                n_modes = number
+
+            self.eigenvalues[i, :n_modes + 1] = eigenvalues[eigen_index[:n_modes+1]]
+            self.eigenmodes[index, :n_modes + 1] = eigenmodes[:, eigen_index[:n_modes +1]]
+
         return self.eigenvalues, self.eigenmodes
 
 
