@@ -12,7 +12,7 @@ class CovarianceMatrix:
 
     #Currently only per baseline not per real and imaginary component of each baseline
 
-    def __init__(self, u, v, nu, group_ids):
+    def __init__(self, u, v, nu, group_ids, per_frequency=True):
         self.u = u
         self.v = v
         self.nu = nu
@@ -22,6 +22,7 @@ class CovarianceMatrix:
         self.matrix =  None
         self.eigenvalues = None
         self.eigenmodes =  None
+        self.per_frequency_flag = per_frequency
 
         return
 
@@ -66,6 +67,9 @@ class CovarianceMatrix:
         nu_grid2 = np.zeros_like(u_grid1)
 
         # Create the full covariance_coordinate grid?
+        # if frequency flag is true, create a grid to store the per frequency channel covariance matrix
+
+
         for i in range(len(self.nu)):
             nu_grid1[i * len(self.u):(i + 1) * len(self.u), :] = self.nu[i]
             nu_grid2[:, i * len(self.u):(i + 1) * len(self.u)] = self.nu[i]
