@@ -133,9 +133,9 @@ class CovarianceMatrix:
         return matrix
 
     def airy(self):
-        """
-        Flat-sky airy beam approximation of an antenna beam
-        """
+        #So we can compute the Fourier Transform of the Airy Power beam pattern, however, for the cross covariance between
+        #two different baselines we need to compute the the convolution between this functions. This looks to be a pain,
+        #so instead we compute that part numerically in absence of an analytical solution.
         return
 
     def actualbeam(self):
@@ -476,3 +476,12 @@ def calibrated_residual_error(u, nu, residuals='both', broken_baselines_weight =
         cal_variance[i, :] = compute_power(nu, nu_cov)
 
     return cal_variance
+
+def circle_otf(x, a):
+    #Fourier Transform of a an Airy Pattern Cubed is also known as the Optical Transfer Function for a Circular
+    #Aperture.
+    f = np.zeros_like(x)
+    index = np.where(np.abs(x) < a)
+    x = np.abs(x[index])
+    f[index] = a**2./2.*np.arccos(x/a) - a**2./2.*(x/a)*(1.-(x/a)**2.)**(1./2.)
+    return f
